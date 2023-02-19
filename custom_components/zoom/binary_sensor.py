@@ -25,7 +25,6 @@ from .const import (
     API,
     ATTR_EVENT,
     CONF_CONNECTIVITY_ON_STATUSES,
-    CONF_VERIFICATION_TOKEN,
     CONNECTIVITY_EVENT,
     CONNECTIVITY_ID,
     CONNECTIVITY_STATUS,
@@ -270,8 +269,7 @@ class ZoomAuthenticatedUserBinarySensor(ZoomBaseBinarySensor):
         """Update status if event received for this entity."""
         status = event.data
         if (
-            status["token"] == self._config_entry.data[CONF_VERIFICATION_TOKEN]
-            and status[ATTR_EVENT] == CONNECTIVITY_EVENT
+            status[ATTR_EVENT] == CONNECTIVITY_EVENT
             and get_data_from_path(status, CONNECTIVITY_ID).lower() == self.id.lower()
         ):
             self._set_state(get_data_from_path(status, CONNECTIVITY_STATUS))
