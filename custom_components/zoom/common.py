@@ -108,22 +108,14 @@ class ZoomWebhookRequestView(HomeAssistantView):
         hass = request.app["hass"]
         headers = request.headers
         verification_tokens = hass.data.get(DOMAIN, {}).get(VERIFICATION_TOKENS, set())
-        tokens = headers.getall("authorization")
 
-        for token in tokens:
-            if not verification_tokens or (token and token in verification_tokens):
-                try:
-                    data = await request.json()
-                    status = WEBHOOK_RESPONSE_SCHEMA(data)
-                    _LOGGER.debug("Received event: %s", status)
-                    hass.bus.async_fire(f"{HA_ZOOM_EVENT}", {**status, "token": token})
-                except Exception as err:
-                    _LOGGER.warning(
-                        "Received authorized event but unable to parse: %s (%s)",
-                        await request.text(),
-                        err,
-                    )
-                return Response(status=HTTPStatus.OK)
+        ts = headers.getone("x-zm-request-timestamp")
+        check = headers.getone("x-zm-signature")
+        textBody = await request.text()
+        digestData = f'v0:{ts}:{textBody}'
+        digest = hmac.new(bytes(next(iter(verification_tokens)), 'latin-1'), msg = bytes(digestData, 'latin-1'), digestmod = hashlib.sha256).hexdigest()
+        if f'v0={digest}' != check:
+            return Response(status=HTTPStatus.UNAUTHORIZED)
 
         try:
             data = await request.json()
@@ -135,18 +127,16 @@ class ZoomWebhookRequestView(HomeAssistantView):
                     data
                 )
                 return json_response({'plainToken': plain, 'encryptedToken': signature})
+
+            status = WEBHOOK_RESPONSE_SCHEMA(data)
+            _LOGGER.warning("Received event: %s", status)
+            hass.bus.async_fire(f"{HA_ZOOM_EVENT}", {**status})
         except Exception as err:
-           _LOGGER.warning(
-                "failed response to validation request: %s (%s)",
-                data,
+            _LOGGER.warning(
+                "Received authorized event but unable to parse: %s (%s)",
+                await request.text(),
                 err,
             )
-
-        _LOGGER.warning(
-            "Received unauthorized request: %s (Headers: %s)",
-            await request.text(),
-            request.headers,
-        )
         return Response(status=HTTPStatus.OK)
 
 
